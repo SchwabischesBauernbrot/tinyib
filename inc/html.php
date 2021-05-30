@@ -20,6 +20,8 @@ function pageHeader() {
 		$js_captcha .= '<script src="https://www.google.com/recaptcha/api.js" async defer></script>';
 	}
 
+	$stylesheets = stylesheets();
+
 	return <<<EOF
 <!DOCTYPE html>
 <html>
@@ -33,14 +35,30 @@ function pageHeader() {
 		<meta name="viewport" content="width=device-width,initial-scale=1">
 		<title>$title</title>
 		<link rel="shortcut icon" href="favicon.ico">
-		<link rel="stylesheet" type="text/css" href="css/global.css">
-		<link rel="stylesheet" type="text/css" href="css/futaba.css" title="Futaba" id="mainStylesheet">
-		<link rel="alternate stylesheet" type="text/css" href="css/burichan.css" title="Burichan">
+		$stylesheets
 		<script src="js/jquery.js"></script>
 		<script src="js/tinyib.js"></script>
 		$js_captcha
 	</head>
 EOF;
+}
+
+function stylesheets() {
+	global $tinyib_skins;
+
+	$global_stylesheet = '<link rel="stylesheet" type="text/css" href="css/global.css">';
+	$default_stylesheet = '<link rel="stylesheet" type="text/css" href="css/' . $tinyib_skins[TINYIB_DEFAULTSKIN] . '.css" title="' . TINYIB_DEFAULTSKIN . '" id="mainStylesheet">';
+	$stylesheets = [$global_stylesheet, $default_stylesheet];
+
+	foreach($tinyib_skins as $display_name => $value) {
+		if ($display_name === TINYIB_DEFAULTSKIN) {
+			continue;
+		}
+
+		$stylesheets[] = '<link rel="alternate stylesheet" type="text/css" href="css/' . $value . '.css" title="' . $display_name . '">';
+	}
+
+	return join($stylesheets, '');
 }
 
 function pageFooter() {
@@ -559,6 +577,8 @@ EOF;
 }
 
 function buildPage($htmlposts, $parent, $pages = 0, $thispage = 0, $lastpostid = 0) {
+	global $tinyib_skins;
+
 	$cataloglink = TINYIB_CATALOG ? ('[<a href="catalog.html" style="text-decoration: underline;">' . __('Catalog') . '</a>]') : '';
 	$managelink = (TINYIB_MANAGEKEY == '') ? ('[<a href="' . basename($_SERVER['PHP_SELF']) . '?manage"" style="text-decoration: underline;">' . __('Manage') . '</a>]') : '';
 
@@ -625,12 +645,23 @@ EOF;
 	$txt_password = __('Password');
 	$txt_delete = __('Delete');
 	$txt_delete_post = __('Delete Post');
+
+	$skinselect = '';
+	if (count($tinyib_skins) > 1) {
+		$options = ['<option value="">' . $txt_style . '</option>'];
+		foreach($tinyib_skins as $display_name => $value) {
+			$options[] = '<option value="' . $value . '">'. $display_name . '</option>';
+		}
+		$options = join('', $options);
+		$skin_select = '<select id="switchStylesheet">'. $options . '</select>';
+	}
+
 	$body = <<<EOF
 	<body>
 		<div class="adminbar">
 			$cataloglink
 			$managelink
-			<select id="switchStylesheet"><option value="">$txt_style</option><option value="futaba">Futaba</option><option value="burichan">Burichan</option></select>
+			$skin_select
 		</div>
 		<div class="logo">
 EOF;
