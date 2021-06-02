@@ -20,7 +20,7 @@ function pageHeader() {
 		$js_captcha .= '<script src="https://www.google.com/recaptcha/api.js" async defer></script>';
 	}
 
-	$stylesheets = stylesheets();
+	$stylesheets = pageStylesheets();
 
 	return <<<EOF
 <!DOCTYPE html>
@@ -43,22 +43,29 @@ function pageHeader() {
 EOF;
 }
 
-function stylesheets() {
-	global $tinyib_skins;
+function pageStylesheets() {
+	global $tinyib_stylesheets;
 
-	$global_stylesheet = '<link rel="stylesheet" type="text/css" href="css/global.css">';
-	$default_stylesheet = '<link rel="stylesheet" type="text/css" href="css/' . $tinyib_skins[TINYIB_DEFAULTSKIN] . '.css" title="' . TINYIB_DEFAULTSKIN . '" id="mainStylesheet">';
-	$stylesheets = [$global_stylesheet, $default_stylesheet];
+	// Global stylesheet
+	$return = '<link rel="stylesheet" type="text/css" href="css/global.css">';
 
-	foreach($tinyib_skins as $display_name => $value) {
-		if ($display_name === TINYIB_DEFAULTSKIN) {
+	// Default stylesheet
+	$default_style_value = htmlentities(TINYIB_DEFAULTSTYLE, ENT_QUOTES);
+	$default_style_name = htmlentities($tinyib_stylesheets[TINYIB_DEFAULTSTYLE]);
+	$return .= '<link rel="stylesheet" type="text/css" href="css/' . 'test' . '.css" title="' . $default_style_name . '" id="mainStylesheet">';
+
+	// Additional stylesheets
+	foreach($tinyib_stylesheets as $value => $display_name) {
+		if ($value === TINYIB_DEFAULTSTYLE) {
 			continue;
 		}
 
-		$stylesheets[] = '<link rel="alternate stylesheet" type="text/css" href="css/' . $value . '.css" title="' . $display_name . '">';
+		$value_html = htmlentities($value, ENT_QUOTES);
+		$name_html = htmlentities($display_name, ENT_QUOTES);
+		$return .= '<link rel="alternate stylesheet" type="text/css" href="css/' . $value_html . '.css" title="' . $name_html . '">';
 	}
 
-	return join($stylesheets, '');
+	return $return;
 }
 
 function pageFooter() {
@@ -577,7 +584,7 @@ EOF;
 }
 
 function buildPage($htmlposts, $parent, $pages = 0, $thispage = 0, $lastpostid = 0) {
-	global $tinyib_skins;
+	global $tinyib_stylesheets;
 
 	$cataloglink = TINYIB_CATALOG ? ('[<a href="catalog.html" style="text-decoration: underline;">' . __('Catalog') . '</a>]') : '';
 	$managelink = (TINYIB_MANAGEKEY == '') ? ('[<a href="' . basename($_SERVER['PHP_SELF']) . '?manage"" style="text-decoration: underline;">' . __('Manage') . '</a>]') : '';
@@ -646,14 +653,18 @@ EOF;
 	$txt_delete = __('Delete');
 	$txt_delete_post = __('Delete Post');
 
-	$skinselect = '';
-	if (count($tinyib_skins) > 1) {
-		$options = ['<option value="">' . $txt_style . '</option>'];
-		foreach($tinyib_skins as $display_name => $value) {
-			$options[] = '<option value="' . $value . '">'. $display_name . '</option>';
+	$style_select = '';
+
+	if (count($tinyib_stylesheets) > 1) {
+		$options = '<option value="">' . $txt_style . '</option>';
+
+		foreach($tinyib_stylesheets as $value => $display_name) {
+			$value_html = htmlentities($value, ENT_QUOTES);
+			$name_html = htmlentities($display_name);
+			$options .= '<option value="' . $value . '">'. $display_name . '</option>';
 		}
-		$options = join('', $options);
-		$skin_select = '<select id="switchStylesheet">'. $options . '</select>';
+
+		$style_select = '<select id="switchStylesheet">'. $options . '</select>';
 	}
 
 	$body = <<<EOF
@@ -661,7 +672,7 @@ EOF;
 		<div class="adminbar">
 			$cataloglink
 			$managelink
-			$skin_select
+			$style_select
 		</div>
 		<div class="logo">
 EOF;

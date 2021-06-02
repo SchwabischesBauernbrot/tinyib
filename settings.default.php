@@ -90,10 +90,11 @@ $tinyib_embeds = array('SoundCloud' => 'https://soundcloud.com/oembed?format=jso
                        'YouTube'    => 'https://www.youtube.com/oembed?url=TINYIBEMBED&format=json');
 
 
-// CSS skins
-define('TINYIB_DEFAULTSKIN', 'Futaba');
-$tinyib_skins = array('Futaba' => 'futaba',
-                      'Burichan' => 'burichan');
+// Stylesheets (located in css)
+//   Format: File name excluding extension => Title
+define('TINYIB_DEFAULTSTYLE', 'futaba');
+$tinyib_stylesheets = array('futaba' => 'Futaba',
+							'burichan' => 'Burichan');
 
 // File control
 define('TINYIB_MAXKB', 2048);         // Maximum file size in kilobytes  [0 to disable]
