@@ -462,6 +462,10 @@ if (!isset($_GET['delete']) && !isset($_GET['manage']) && (isset($_POST['name'])
 				$post['thumb'] = $temp_file . '.gif';
 			} else if ($file_mime == "image/png") {
 				$post['thumb'] = $temp_file . '.png';
+			} else if ($file_mime == "image/avif") {
+				$post['thumb'] = $temp_file . '.avif';
+			} else if ($file_mime == "image/heif") {
+				$post['thumb'] = $temp_file . '.avif';
 			} else {
 				fancyDie(__('Error while processing audio/video.'));
 			}

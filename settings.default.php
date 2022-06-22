@@ -80,7 +80,9 @@ define('TINYIB_MAXMESSAGE', 8000);    // Maximum message length  [0 to disable]
 $tinyib_uploads = array('image/jpeg'                    => array('jpg'),
                         'image/pjpeg'                   => array('jpg'),
                         'image/png'                     => array('png'),
-                        'image/gif'                     => array('gif'));
+                        'image/gif'                     => array('gif'),
+//                      'image/avif'                    => array('avif'),
+//                      'image/heif'                    => array('avif'));
 //                      'application/x-shockwave-flash' => array('swf', 'swf_thumbnail.png');
 //                      'audio/aac'                     => array('aac');
 //                      'audio/flac'                    => array('flac');

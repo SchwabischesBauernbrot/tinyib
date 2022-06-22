@@ -50,12 +50,14 @@ support in mind.
 ## Install
 
  1. Verify the following are installed:
-    - [PHP 5.5+](https://php.net)
+    - [PHP 5.5+](https://php.net), or PHP 8.2.0+ for avif support
     - [GD Image Processing Library](https://php.net/gd)
       - This library is usually installed by default.
       - If you plan on disabling image uploads to use TinyIB as a text board only, this library is not required.
      - [cURL Library](https://www.php.net/manual/en/book.curl.php)
        - This is recommended, but is not strictly required except when `TINYIB_CAPTCHA` is set to `hcaptcha` or `recaptcha`.
+    - AVIF Library
+      - Compile PHP using `--with-avif`
  2. CD to the directory you wish to install TinyIB.
  3. Run the command:
     - `git clone https://code.rocketnine.space/tslocum/tinyib.git ./`

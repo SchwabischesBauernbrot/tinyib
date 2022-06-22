@@ -497,17 +497,27 @@ function buildPost($post, $res, $compact=false) {
 	<source src="$direct_link"></source>
 </video>
 EOF;
-	} else if (in_array(substr($post['file'], -4), array('.jpg', '.png', '.gif'))) {
-		$expandhtml = "<a href=\"$direct_link\" onclick=\"return expandFile(event, '${post['id']}');\"><img src=\"" . ($res == TINYIB_RESPAGE ? "../" : "") . "src/${post["file"]}\" width=\"${post["image_width"]}\" style=\"max-width: {$w}vw;height: auto;\"></a>";
+	} else if (in_array(substr($post['file'], -4), array('.jpg', '.png', '.gif', 'avif'))) {
+		$fallback = "fallback/" . pathinfo($post["file"])['filename'] . ".jpg";
+		$attributes = "width=\"{$post["image_width"]}\" style=\"max-width: {$w}vw;height: auto;\"";
+		$expandhtml .= "<a href=\"$direct_link\" onclick=\"return expandFile(event, '{$post['id']}');\">";
+
+		if (file_exists($fallback)) {
+			$expandhtml .= "<object data=\"" . ($res == TINYIB_RESPAGE ? "../" : "") . "src/{$post["file"]}\" {$attributes}><img src=\"{$fallback}\"/></object>";
+		} else {
+			$expandhtml .= "<img src=\"" . ($res == TINYIB_RESPAGE ? "../" : "") . "src/{$post["file"]}\" {$attributes}/>";
+		}
+
+		$expandhtml .= '</a>';
 	}
 
-	$thumblink = "<a href=\"$direct_link\" target=\"_blank\"" . ((isEmbed($post["file_hex"]) || in_array(substr($post['file'], -4), array('.jpg', '.png', '.gif', 'webm', '.mp4'))) ? " onclick=\"return expandFile(event, '${post['id']}');\"" : "") . ">";
+	$thumblink = "<a href=\"$direct_link\" target=\"_blank\"" . ((isEmbed($post["file_hex"]) || in_array(substr($post['file'], -4), array('.jpg', '.png', '.gif', 'avif', 'webm', '.mp4'))) ? " onclick=\"return expandFile(event, '{$post['id']}');\"" : "") . ">";
 	$expandhtml = rawurlencode($expandhtml);
 
 	if (isEmbed($post["file_hex"])) {
-		$filesize .= "<a href=\"$direct_link\" onclick=\"return expandFile(event, '${post['id']}');\">${post['file_original']}</a>&ndash;(${post['file_hex']})";
+		$filesize .= "<a href=\"$direct_link\" onclick=\"return expandFile(event, '{$post['id']}');\">{$post['file_original']}</a>&ndash;({$post['file_hex']})";
 	} else if ($post["file"] != '') {
-		$filesize .= $thumblink . "${post["file"]}</a>&ndash;(${post["file_size_formatted"]}";
+		$filesize .= $thumblink . "{$post["file"]}</a>&ndash;({$post["file_size_formatted"]}";
 		if ($post["image_width"] > 0 && $post["image_height"] > 0) {
 			$filesize .= ", " . $post["image_width"] . "x" . $post["image_height"];
 		}
@@ -527,18 +537,32 @@ EOF;
 		}
 		$filehtml .= $filesize . '<br><div id="thumbfile' . $post['id'] . '">';
 		if ($post["thumb_width"] > 0 && $post["thumb_height"] > 0) {
-			$filehtml .= <<<EOF
+			$attributes = <<<EOF
+alt="{$post["id"]}" class="thumb" id="thumbnail{$post['id']}" width="{$post["thumb_width"]}" height="{$post["thumb_height"]}"
+EOF;
+			$fallback = "fallback/" . pathinfo($post["thumb"])['filename'] . ".jpg";
+			if (file_exists($fallback)) {
+				$filehtml .= <<<EOF
 $thumblink
-	<img src="thumb/${post["thumb"]}" alt="${post["id"]}" class="thumb" id="thumbnail${post['id']}" width="${post["thumb_width"]}" height="${post["thumb_height"]}">
+	<object data="thumb/{$post["thumb"]}" $attributes>
+		<img src="$fallback">
+	</object>
 </a>
 EOF;
+			} else {
+			$filehtml .= <<<EOF
+$thumblink
+	<img src="thumb/{$post["thumb"]}" $attributes>
+</a>
+EOF;
+			}
 		}
 		$filehtml .= '</div>';
 
 		if ($expandhtml != '') {
 			$filehtml .= <<<EOF
-<div id="expand${post['id']}" style="display: none;">$expandhtml</div>
-<div id="file${post['id']}" class="thumb" style="display: none;"></div>
+<div id="expand{$post['id']}" style="display: none;">$expandhtml</div>
+<div id="file{$post['id']}" class="thumb" style="display: none;"></div>
 EOF;
 		}
 	}
@@ -556,15 +580,15 @@ EOF;
 <td class="doubledash">
 	&#0168;
 </td>
-<td class="reply" id="post${post["id"]}">
+<td class="reply" id="post{$post["id"]}">
 EOF;
 		}
 	}
 
 	$return .= <<<EOF
-<a id="${post['id']}"></a>
+<a id="{$post['id']}"></a>
 <label>
-	<input type="checkbox" name="delete[]" value="${post['id']}"> 
+	<input type="checkbox" name="delete[]" value="{$post['id']}">
 EOF;
 
 	if ($post['subject'] != '') {
@@ -572,7 +596,7 @@ EOF;
 	}
 
 	$return .= <<<EOF
-${post["nameblock"]}
+{$post["nameblock"]}
 </label>
 <span class="reflink">
 	$reflink
@@ -589,7 +613,7 @@ EOF;
 
 	if ($post['parent'] == TINYIB_NEWTHREAD) {
 		if ($res == TINYIB_INDEXPAGE) {
-			$return .= "&nbsp;[<a href=\"res/${post["id"]}.html\">" . __("Reply") . "</a>]";
+			$return .= "&nbsp;[<a href=\"res/{$post["id"]}.html\">" . __("Reply") . "</a>]";
 		}
 		$return .= backlinks($post);
 	}
@@ -601,7 +625,7 @@ EOF;
 	}
 	$return .= <<<EOF
 <div class="message">
-${post["message"]}
+{$post["message"]}
 </div>
 EOF;
 
@@ -1228,7 +1252,7 @@ function manageBanForm() {
 	<fieldset>
 	<legend>$txt_ban</legend>
 	<table border="0">
-	<tr><td><label for="ip">$txt_ban_ip</label></td><td><input type="text" name="ip" id="ip" value="${_GET['bans']}"></td><td><input type="submit" value="$txt_submit" class="managebutton"></td></tr>
+	<tr><td><label for="ip">$txt_ban_ip</label></td><td><input type="text" name="ip" id="ip" value="{$_GET['bans']}"></td><td><input type="submit" value="$txt_submit" class="managebutton"></td></tr>
 	<tr><td><label for="expire">$txt_ban_expire</label></td><td><input type="text" name="expire" id="expire" value="0"></td><td><small><a href="#" onclick="document.tinyib.expire.value='3600';return false;">$txt_1h</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='86400';return false;">$txt_1d</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='172800';return false;">$txt_2d</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='604800';return false;">$txt_1w</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='1209600';return false;">$txt_2w</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='2592000';return false;">$txt_1m</a>&nbsp;<a href="#" onclick="document.tinyib.expire.value='0';return false;">$txt_ban_never</a></small></td></tr>
 	<tr><td><label for="reason">$txt_ban_reason</label></td><td><input type="text" name="reason" id="reason"></td><td><small>$txt_ban_optional</small></td></tr>
 	$banmessage_html
@@ -1381,7 +1405,7 @@ function manageModeratePost($post, $compact=false) {
 	<tr><td>
 		<form method="get" action="?">
 		<input type="hidden" name="manage" value="">
-		<input type="hidden" name="sticky" value="${post['id']}">
+		<input type="hidden" name="sticky" value="{$post['id']}">
 		<input type="hidden" name="setsticky" value="$sticky_set">
 		<input type="submit" value="$sticky_unsticky" class="managebutton">
 		</form>
@@ -1395,7 +1419,7 @@ EOF;
 	<tr><td>
 		<form method="get" action="?">
 		<input type="hidden" name="manage" value="">
-		<input type="hidden" name="lock" value="${post['id']}">
+		<input type="hidden" name="lock" value="{$post['id']}">
 		<input type="hidden" name="setlock" value="$lock_set">
 		<input type="submit" value="$lock_label" class="managebutton">
 		</form>
@@ -1423,7 +1447,7 @@ EOF;
 	
 <form method="get" action="?">
 <input type="hidden" name="manage" value="">
-<input type="hidden" name="clearreports" value="${post['id']}">
+<input type="hidden" name="clearreports" value="{$post['id']}">
 <input type="submit" value="$txt_clear_reports" class="managebutton">
 </form>
 
@@ -1452,7 +1476,7 @@ EOF;
 	
 	<form method="get" action="?">
 	<input type="hidden" name="manage" value="">
-	<input type="hidden" name="delete" value="${post['id']}">
+	<input type="hidden" name="delete" value="{$post['id']}">
 	<input type="submit" value="$txt_delete" class="managebutton">
 	</form>
 	
@@ -1461,8 +1485,8 @@ EOF;
 	
 	<form method="get" action="?">
 	<input type="hidden" name="manage" value="">
-	<input type="hidden" name="bans" value="${post['ip']}">
-	<input type="hidden" name="posts" value="${post['id']}">
+	<input type="hidden" name="bans" value="{$post['ip']}">
+	<input type="hidden" name="posts" value="{$post['id']}">
 	<input type="submit" value="$txt_ban" class="managebutton" $ban_disabled>
 	</form>
 	

@@ -613,116 +613,125 @@ function ffmpegThumbnail($file_location, $thumb_location, $new_w, $new_h) {
 	}
 }
 
+// TODO: Check whether I missed error handling somewhere during refactoring.
+function readImageFromFile($path, $error_message) {
+	switch (pathinfo($path)["extension"]) {
+		case "jpg":
+		case "jpeg": return imagecreatefromjpeg($path);
+		case "png": return imagecreatefrompng($path);
+		case "gif": return imagecreatefromgif($path);
+		case "avif": return imagecreatefromavif($path);
+	}
+	fancyDie(__($error_message));
+	return false;
+}
+
+function saveImageToFile($image, $path) {
+	switch (pathinfo($path)["extension"]) {
+		case "jpg":
+		case "jpeg": return imagejpeg($image, $path, 90); // why only set quality for jpegs?
+		case "png": return imagepng($image, $path);
+		case "gif": return imagegif($image, $path);
+		case "avif": return imageavif($image, $path);
+	}
+	return false;
+}
+
+function resizeImage($src_img, $max_width, $max_height, $file_extension) {
+	$src_width = imageSX($src_img);
+	$src_height = imageSY($src_img);
+
+	$ratio = ($src_width > $src_height) ? ($max_width / $src_width) : ($max_height / $src_height);
+
+	$target_width = round($src_width * $ratio);
+	$target_height = round($src_height * $ratio);
+
+	// Why don't we use imagescale (PHP 5 >= 5.5.0, PHP 7, PHP 8) here?
+	$dst_img = imagecreatetruecolor($target_width, $target_height);
+
+	if ($file_extension === 'png') {
+		imagealphablending($dst_img, false);
+		imagesavealpha($dst_img, true);
+
+		$color = imagecolorallocatealpha($dst_img, 0, 0, 0, 0);
+		imagefilledrectangle($dst_img, 0, 0, $target_width, $target_height, $color);
+		imagecolortransparent($dst_img, $color);
+
+		imagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $target_width, $target_height, $src_width, $src_height);
+	} else {
+		fastimagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $target_width, $target_height, $src_width, $src_height);
+	}
+
+	return $dst_img;
+}
+
+function blurImage($image) {
+	$gaussian = array(array(1.0, 2.0, 1.0), array(2.0, 4.0, 2.0), array(1.0, 2.0, 1.0));
+
+	for ($x = 1; $x <= 149; $x++) {
+		imageconvolution($image, $gaussian, 16, 0);
+	}
+}
+
+function createFallbackImage($source, $destination) {
+	$image = readImageFromFile($source, 'Unable to read the uploaded file while creating its thumbnail. A common cause for this is an incorrect extension when the file is actually of a different type.');
+	saveImageToFile($image, $destination);
+}
+
+function imageMagickThumbnail($file_location, $thumb_location, $new_w, $new_h) {
+	$discard = '';
+
+	$exit_status = 1;
+	exec("convert -version", $discard, $exit_status);
+	if ($exit_status != 0) {
+		fancyDie('ImageMagick is not installed, or the convert command is not in the server\'s $PATH.<br>Install ImageMagick, or set TINYIB_THUMBNAIL to \'gd\' or \'ffmpeg\'.');
+	}
+
+	$exit_status = 1;
+	exec("convert $file_location -auto-orient -thumbnail '" . $new_w . "x" . $new_h . "' -coalesce -layers OptimizeFrame -depth 4 -type palettealpha $thumb_location", $discard, $exit_status);
+
+	if ($exit_status != 0) {
+		return false;
+	}
+}
+
+function gdThumbnail($file_location, $file_extension, $thumb_location, $new_w, $new_h) {
+	$src_img = readImageFromFile($file_location, 'Unable to read the uploaded file while creating its thumbnail. A common cause for this is an incorrect extension when the file is actually of a different type.');
+	$dst_img = resizeImage($src_img, $new_w, $new_h, $file_extension);
+	saveImageToFile($dst_img, $thumb_location);
+	imagedestroy($dst_img);
+	imagedestroy($src_img);
+}
+
+function spoilerThumbnail($file_location, $thumb_location) {
+	// Why don't we resize images here?
+	$src_img = readImageFromFile($file_location, 'Unable to read the uploaded file while creating its thumbnail. A common cause for this is an incorrect extension when the file is actually of a different type.');
+
+	blurImage($src_img);
+	saveImageToFile($src_img, $thumb_location);
+	imagedestroy($src_img);
+}
+
 function createThumbnail($file_location, $thumb_location, $new_w, $new_h, $spoiler) {
-	$system = explode(".", $thumb_location);
-	$system = array_reverse($system);
-	if (TINYIB_THUMBNAIL == 'gd' || (TINYIB_THUMBNAIL == 'ffmpeg' && preg_match("/jpg|jpeg/", $system[0]))) {
-		if (preg_match("/jpg|jpeg/", $system[0])) {
-			$src_img = imagecreatefromjpeg($file_location);
-		} else if (preg_match("/png/", $system[0])) {
-			$src_img = imagecreatefrompng($file_location);
-		} else if (preg_match("/gif/", $system[0])) {
-			$src_img = imagecreatefromgif($file_location);
-		} else {
-			return false;
-		}
+	$path = pathinfo($file_location);
+	$file_extension = $path['extension'];
 
-		if (!$src_img) {
-			fancyDie(__('Unable to read the uploaded file while creating its thumbnail. A common cause for this is an incorrect extension when the file is actually of a different type.'));
-		}
-
-		$old_x = imageSX($src_img);
-		$old_y = imageSY($src_img);
-		$percent = ($old_x > $old_y) ? ($new_w / $old_x) : ($new_h / $old_y);
-		$thumb_w = round($old_x * $percent);
-		$thumb_h = round($old_y * $percent);
-
-		$dst_img = imagecreatetruecolor($thumb_w, $thumb_h);
-		if (preg_match("/png/", $system[0]) && imagepng($src_img, $thumb_location)) {
-			imagealphablending($dst_img, false);
-			imagesavealpha($dst_img, true);
-
-			$color = imagecolorallocatealpha($dst_img, 0, 0, 0, 0);
-			imagefilledrectangle($dst_img, 0, 0, $thumb_w, $thumb_h, $color);
-			imagecolortransparent($dst_img, $color);
-
-			imagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $thumb_w, $thumb_h, $old_x, $old_y);
-		} else {
-			fastimagecopyresampled($dst_img, $src_img, 0, 0, 0, 0, $thumb_w, $thumb_h, $old_x, $old_y);
-		}
-
-		if (preg_match("/png/", $system[0])) {
-			if (!imagepng($dst_img, $thumb_location)) {
-				return false;
-			}
-		} else if (preg_match("/jpg|jpeg/", $system[0])) {
-			if (!imagejpeg($dst_img, $thumb_location, 70)) {
-				return false;
-			}
-		} else if (preg_match("/gif/", $system[0])) {
-			if (!imagegif($dst_img, $thumb_location)) {
-				return false;
-			}
-		}
-
-		imagedestroy($dst_img);
-		imagedestroy($src_img);
+	if (TINYIB_THUMBNAIL == 'gd' || (TINYIB_THUMBNAIL == 'ffmpeg' && preg_match("/jpg|jpeg/", $file_extension))) {
+		gdThumbnail($file_location, $file_extension, $thumb_location, $new_w, $new_h);
 	} else if (TINYIB_THUMBNAIL == 'ffmpeg') {
 		ffmpegThumbnail($file_location, $thumb_location, $new_w, $new_h);
-	} else { // ImageMagick
-		$discard = '';
-
-		$exit_status = 1;
-		exec("convert -version", $discard, $exit_status);
-		if ($exit_status != 0) {
-			fancyDie('ImageMagick is not installed, or the convert command is not in the server\'s $PATH.<br>Install ImageMagick, or set TINYIB_THUMBNAIL to \'gd\' or \'ffmpeg\'.');
-		}
-
-		$exit_status = 1;
-		exec("convert $file_location -auto-orient -thumbnail '" . $new_w . "x" . $new_h . "' -coalesce -layers OptimizeFrame -depth 4 -type palettealpha $thumb_location", $discard, $exit_status);
-
-		if ($exit_status != 0) {
-			return false;
-		}
-	}
-
-	if (!$spoiler) {
-		return true;
-	}
-
-	if (preg_match("/jpg|jpeg/", $system[0])) {
-		$src_img = imagecreatefromjpeg($thumb_location);
-	} else if (preg_match("/png/", $system[0])) {
-		$src_img = imagecreatefrompng($thumb_location);
-	} else if (preg_match("/gif/", $system[0])) {
-		$src_img = imagecreatefromgif($thumb_location);
 	} else {
-		return true;
+		imageMagickThumbnail($file_location, $thumb_location, $new_w, $new_h);
 	}
 
-	if (!$src_img) {
-		fancyDie(__('Unable to read the uploaded file while creating its thumbnail. A common cause for this is an incorrect extension when the file is actually of a different type.'));
+	if ($spoiler) {
+		spoilerThumbnail($file_location, $thumb_location);
 	}
 
-	$gaussian = array(array(1.0, 2.0, 1.0), array(2.0, 4.0, 2.0), array(1.0, 2.0, 1.0));
-	for ($x = 1; $x <= 149; $x++) {
-		imageconvolution($src_img, $gaussian, 16, 0);
+	if ($file_extension === 'avif') {
+		createFallbackImage($thumb_location, 'fallback/' . $path['filename'] . 's.jpg');
 	}
 
-	if (preg_match("/png/", $system[0])) {
-		if (!imagepng($src_img, $thumb_location)) {
-			return false;
-		}
-	} else if (preg_match("/jpg|jpeg/", $system[0])) {
-		if (!imagejpeg($src_img, $thumb_location, 70)) {
-			return false;
-		}
-	} else if (preg_match("/gif/", $system[0])) {
-		if (!imagegif($src_img, $thumb_location)) {
-			return false;
-		}
-	}
-	imagedestroy($src_img);
 	return true;
 }
 
@@ -906,7 +915,7 @@ function attachFile($post, $filepath, $filename, $uploaded, $spoiler) {
 	$post['file_size_formatted'] = convertBytes($post['file_size']);
 	checkDuplicateFile($post['file_hex']);
 
-	if (in_array($file_mime, array('image/jpeg', 'image/pjpeg', 'image/png', 'image/gif', 'application/x-shockwave-flash'))) {
+	if (in_array($file_mime, array('image/jpeg', 'image/pjpeg', 'image/png', 'image/gif', 'application/x-shockwave-flash', 'image/avif', 'image/heif'))) {
 		$file_info = getimagesize($file_src);
 		$post['image_width'] = $file_info[0] != '' ? $file_info[0] : 0;
 		$post['image_height'] = $file_info[1] != '' ? $file_info[1] : 0;
@@ -922,13 +931,17 @@ function attachFile($post, $filepath, $filename, $uploaded, $spoiler) {
 		if ($file_mime == 'application/x-shockwave-flash') {
 			addVideoOverlay('thumb/' . $post['thumb']);
 		}
-	} else if (in_array($file_mime, array('image/jpeg', 'image/pjpeg', 'image/png', 'image/gif'))) {
+	} else if (in_array($file_mime, array('image/jpeg', 'image/pjpeg', 'image/png', 'image/gif', 'image/avif', 'image/heif'))) {
 		$post['thumb'] = $file_name_pre . 's.' . $tinyib_uploads[$file_mime][0];
 		list($thumb_maxwidth, $thumb_maxheight) = thumbnailDimensions($post);
 
 		if (!createThumbnail($file_src, 'thumb/' . $post['thumb'], $thumb_maxwidth, $thumb_maxheight, $spoiler)) {
 			@unlink($file_src);
 			fancyDie(__('Could not create thumbnail.'));
+		}
+
+		if (in_array($file_mime, array('image/avif', 'image/heif'))) {
+			createFallbackImage($file_src, "fallback/$file_name_pre.jpg");
 		}
 	} else if ($file_mime == 'audio/webm' || $file_mime == 'video/webm' || $file_mime == 'audio/mp4' || $file_mime == 'video/mp4') {
 		list($post['image_width'], $post['image_height']) = videoDimensions($file_src);
